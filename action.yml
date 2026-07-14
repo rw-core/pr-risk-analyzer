@@ -1,7 +1,6 @@
 name: PR Risk Analyzer
 description: >-
-  Language-agnostic action that uses rw_git to identify if a pull request modifies
-  historical bug hotspots or highly volatile files.
+  A Github Action that identifies files that are bug hotspots, or have high volatility and churn.
 author: rw-core
 branding:
   icon: alert-circle

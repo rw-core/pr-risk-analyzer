@@ -1,0 +1,25 @@
+name: Commit Health Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  check-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Commit Health Gate
+        uses: rw-core/commit-health-gate@v1
+        with:
+          mega-commit-line-threshold: '500'
+          mega-commit-file-threshold: '20'
+          fail-on-violation: 'false'

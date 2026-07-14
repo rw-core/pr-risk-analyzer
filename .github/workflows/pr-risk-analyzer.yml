@@ -1,0 +1,20 @@
+name: PR Analysis
+on: [pull_request]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run PR Risk Analyzer
+        uses: rw-core/pr-risk-analyzer@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          volatility-threshold: '20.0'
+          fail-on-warning: 'false'

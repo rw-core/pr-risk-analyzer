@@ -1,0 +1,17 @@
+name: pr_risk_analyzer
+description: A GitHub Action that flags pull requests modifying historical bug hotspots and highly volatile files.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  rw_git: ^3.4.2
+  http: ^1.2.1
+
+dev_dependencies:
+  lints: ^3.0.0
+
+executables:
+  main: main

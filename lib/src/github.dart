@@ -11,8 +11,8 @@ class GitHub {
     required this.repository,
     http.Client? client,
     String? apiUrl,
-  })  : _client = client ?? http.Client(),
-        _apiUrl = apiUrl ?? 'https://api.github.com';
+  }) : _client = client ?? http.Client(),
+       _apiUrl = apiUrl ?? 'https://api.github.com';
 
   final String token;
 
@@ -20,15 +20,15 @@ class GitHub {
   final String repository;
   final http.Client _client;
   final String _apiUrl;
-  
+
   static const marker = '<!-- pr-risk-analyzer-marker -->';
 
   Map<String, String> get _headers => {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $token',
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'Content-Type': 'application/json',
+  };
 
   /// Appends [markdown] to the job summary shown in the Actions run.
   static void writeStepSummary(String markdown, {String? path}) {
@@ -95,8 +95,10 @@ class GitHub {
   Future<int?> _findMarkerComment(int issueNumber) async {
     for (var page = 1; page <= 10; page++) {
       final res = await _client.get(
-        Uri.parse('$_apiUrl/repos/$repository/issues/$issueNumber/comments'
-            '?per_page=100&page=$page'),
+        Uri.parse(
+          '$_apiUrl/repos/$repository/issues/$issueNumber/comments'
+          '?per_page=100&page=$page',
+        ),
         headers: _headers,
       );
       if (res.statusCode != 200) return null;

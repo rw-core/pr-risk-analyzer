@@ -18,7 +18,9 @@ Future<void> main() async {
   final shas = GitHub.readPrShas(eventPath);
 
   if (shas == null) {
-    stderr.writeln('pr-risk-analyzer: not a pull_request event; nothing to analyse.');
+    stderr.writeln(
+      'pr-risk-analyzer: not a pull_request event; nothing to analyse.',
+    );
     return;
   }
 
@@ -31,13 +33,20 @@ Future<void> main() async {
 
   // --- GET MODIFIED FILES ---
   stdout.writeln('Fetching PR modified files...');
-  final diffRes = await runner.run('git', ['diff', '--name-only', prBaseSha, prHeadSha], workingDirectory: repositoryPath);
+  final diffRes = await runner.run('git', [
+    'diff',
+    '--name-only',
+    prBaseSha,
+    prHeadSha,
+  ], workingDirectory: repositoryPath);
   if (diffRes.exitCode != 0) {
-    stderr.writeln('pr-risk-analyzer: failed to run git diff: ${diffRes.stderr}');
+    stderr.writeln(
+      'pr-risk-analyzer: failed to run git diff: ${diffRes.stderr}',
+    );
     exitCode = 1;
     return;
   }
-  
+
   final modifiedFiles = (diffRes.stdout?.toString() ?? '')
       .split('\n')
       .map((l) => l.trim())
@@ -101,13 +110,23 @@ Future<void> main() async {
   });
 
   // --- COMPOUND RISKS ANALYSIS ---
-  stdout.writeln('Fetching historical churn, code quality, and refactorings for compound risks...');
-  final historicalChurn = await ChurnHeuristic(runner).calculateChurnWithAuthors(repositoryPath, since: '1.year.ago');
-  final codeQuality = await AdvancedMetricsHeuristic(runner).calculateAdvancedMetrics(repositoryPath);
-  final recentRefactorings = await RefactoringDetectionAlgorithm(runner).execute(repositoryPath);
+  stdout.writeln(
+    'Fetching historical churn, code quality, and refactorings for compound risks...',
+  );
+  final historicalChurn = await ChurnHeuristic(
+    runner,
+  ).calculateChurnWithAuthors(repositoryPath, since: '1.year.ago');
+  final codeQuality = await AdvancedMetricsHeuristic(
+    runner,
+  ).calculateAdvancedMetrics(repositoryPath);
+  final recentRefactorings = await RefactoringDetectionAlgorithm(
+    runner,
+  ).execute(repositoryPath);
 
   final bugHotspotFiles = bugHotspots.map((m) => m.filePath).toSet();
-  final highlyVolatileFileNames = highlyVolatileFiles.map((v) => v.filePath).toSet();
+  final highlyVolatileFileNames = highlyVolatileFiles
+      .map((v) => v.filePath)
+      .toSet();
 
   final refactoredFiles = <String>{};
   for (final ref in recentRefactorings) {
@@ -122,9 +141,10 @@ Future<void> main() async {
     }
   }
 
-  final fileChurnList = historicalChurn.fileChurn.values.toList()..sort((a, b) => a.total.compareTo(b.total));
+  final fileChurnList = historicalChurn.fileChurn.values.toList()
+    ..sort((a, b) => a.total.compareTo(b.total));
   final fileComplexityList = codeQuality.fileComplexity.values.toList()..sort();
-  
+
   double getChurnPercentile(int total) {
     if (fileChurnList.isEmpty) return 0.0;
     final index = fileChurnList.indexWhere((c) => c.total >= total);
@@ -195,7 +215,9 @@ Future<void> main() async {
     }
   }
 
-  final departureDefectAuthors = singleOwnerFiles.entries.where((e) => e.value.length >= 2).toList();
+  final departureDefectAuthors = singleOwnerFiles.entries
+      .where((e) => e.value.length >= 2)
+      .toList();
 
   GitHub.writeOutputs({
     'tribal-knowledge-count': '${tribalKnowledgeFiles.length}',
@@ -207,17 +229,30 @@ Future<void> main() async {
 
   // --- REPORT GENERATION ---
   final sb = StringBuffer();
-  
-  final hasCompoundRisks = tribalKnowledgeFiles.isNotEmpty || tooManyCooksFiles.isNotEmpty || departureDefectAuthors.isNotEmpty || defectInjectionFiles.isNotEmpty || cleanUpExceptionFiles.isNotEmpty;
+
+  final hasCompoundRisks =
+      tribalKnowledgeFiles.isNotEmpty ||
+      tooManyCooksFiles.isNotEmpty ||
+      departureDefectAuthors.isNotEmpty ||
+      defectInjectionFiles.isNotEmpty ||
+      cleanUpExceptionFiles.isNotEmpty;
   if (hasCompoundRisks) {
     sb.writeln('## 🎯 Compound PR Risks');
-    sb.writeln('Actionable compound findings identified by combining multiple risk vectors:\n');
-    
+    sb.writeln(
+      'Actionable compound findings identified by combining multiple risk vectors:\n',
+    );
+
     if (tribalKnowledgeFiles.isNotEmpty) {
       sb.writeln('### 🔴 Tribal Knowledge Risk');
-      sb.writeln('**Condition**: A bug hotspot file is owned by a single author (Bus factor > 50%).');
-      sb.writeln('**Rationale**: Undocumented tribal knowledge in bug-prone code increases the risk of injecting defects if the context is siloed.');
-      sb.writeln('> **Citation**: Avelino et al. (2016) - Knowledge loss and defect proneness.');
+      sb.writeln(
+        '**Condition**: A bug hotspot file is owned by a single author (Bus factor > 50%).',
+      );
+      sb.writeln(
+        '**Rationale**: Undocumented tribal knowledge in bug-prone code increases the risk of injecting defects if the context is siloed.',
+      );
+      sb.writeln(
+        '> **Citation**: Avelino et al. (2016) - Knowledge loss and defect proneness.',
+      );
       for (final f in tribalKnowledgeFiles) {
         sb.writeln('- **`$f`**');
       }
@@ -226,9 +261,15 @@ Future<void> main() async {
 
     if (tooManyCooksFiles.isNotEmpty) {
       sb.writeln('### 🟠 Too Many Cooks Risk');
-      sb.writeln('**Condition**: A bug hotspot file has three or more minor contributors (< 5% ownership).');
-      sb.writeln('**Rationale**: The count of minor contributors is an even stronger defect predictor than ownership concentration itself.');
-      sb.writeln('> **Citation**: Bird et al. (FSE 2011) - Don\'t touch my code: examining the effects of ownership on software quality.');
+      sb.writeln(
+        '**Condition**: A bug hotspot file has three or more minor contributors (< 5% ownership).',
+      );
+      sb.writeln(
+        '**Rationale**: The count of minor contributors is an even stronger defect predictor than ownership concentration itself.',
+      );
+      sb.writeln(
+        '> **Citation**: Bird et al. (FSE 2011) - Don\'t touch my code: examining the effects of ownership on software quality.',
+      );
       for (final f in tooManyCooksFiles) {
         sb.writeln('- **`$f`**');
       }
@@ -237,11 +278,19 @@ Future<void> main() async {
 
     if (departureDefectAuthors.isNotEmpty) {
       sb.writeln('### 🔴 Departure Defect Risk');
-      sb.writeln('**Condition**: A single author solely owns two or more single-owner bug-hotspot files.');
-      sb.writeln('**Rationale**: The departure of this specific developer would orphan the most defect-prone code in the repository.');
-      sb.writeln('> **Citation**: Mockus & Herbsleb (2002); Avelino et al. (2016).');
+      sb.writeln(
+        '**Condition**: A single author solely owns two or more single-owner bug-hotspot files.',
+      );
+      sb.writeln(
+        '**Rationale**: The departure of this specific developer would orphan the most defect-prone code in the repository.',
+      );
+      sb.writeln(
+        '> **Citation**: Mockus & Herbsleb (2002); Avelino et al. (2016).',
+      );
       for (final entry in departureDefectAuthors) {
-        sb.writeln('- **`${entry.key}`** owns ${entry.value.length} hotspot files:');
+        sb.writeln(
+          '- **`${entry.key}`** owns ${entry.value.length} hotspot files:',
+        );
         for (final f in entry.value) {
           sb.writeln('  - `$f`');
         }
@@ -251,9 +300,15 @@ Future<void> main() async {
 
     if (defectInjectionFiles.isNotEmpty) {
       sb.writeln('### 🔴 Defect-Injection Predictor (Refactoring Targets)');
-      sb.writeln('**Condition**: High churn combined with a high complexity outlier on the same file (product > 0.25).');
-      sb.writeln('**Rationale**: Actively-changing complex code is the prime defect-injection risk. These are prime refactoring targets.');
-      sb.writeln('> **Citation**: Nagappan & Ball (2005); Tornhill (2015) - Prioritizing tech debt in the PR.');
+      sb.writeln(
+        '**Condition**: High churn combined with a high complexity outlier on the same file (product > 0.25).',
+      );
+      sb.writeln(
+        '**Rationale**: Actively-changing complex code is the prime defect-injection risk. These are prime refactoring targets.',
+      );
+      sb.writeln(
+        '> **Citation**: Nagappan & Ball (2005); Tornhill (2015) - Prioritizing tech debt in the PR.',
+      );
       for (final f in defectInjectionFiles) {
         sb.writeln('- **`$f`**');
       }
@@ -262,9 +317,15 @@ Future<void> main() async {
 
     if (cleanUpExceptionFiles.isNotEmpty) {
       sb.writeln('### 🟢 Clean-up Exception');
-      sb.writeln('**Condition**: High volatility/churn on files modified by detected refactorings.');
-      sb.writeln('**Rationale**: High churn explained by clean-up and refactoring carries a demonstrably lower defect risk.');
-      sb.writeln('> **Citation**: Neto et al. (SANER 2018) - The Impact of Refactoring Changes on the SZZ Algorithm.');
+      sb.writeln(
+        '**Condition**: High volatility/churn on files modified by detected refactorings.',
+      );
+      sb.writeln(
+        '**Rationale**: High churn explained by clean-up and refactoring carries a demonstrably lower defect risk.',
+      );
+      sb.writeln(
+        '> **Citation**: Neto et al. (SANER 2018) - The Impact of Refactoring Changes on the SZZ Algorithm.',
+      );
       for (final f in cleanUpExceptionFiles) {
         sb.writeln('- **`$f`** (Volatility warnings can be downgraded)');
       }
@@ -277,48 +338,74 @@ Future<void> main() async {
   final hasWarnings = bugHotspots.isNotEmpty || highlyVolatileFiles.isNotEmpty;
 
   if (!hasWarnings) {
-    sb.writeln('✅ No bug hotspots or highly volatile files detected in this PR.');
+    sb.writeln(
+      '✅ No bug hotspots or highly volatile files detected in this PR.',
+    );
   } else {
     if (bugHotspots.isNotEmpty) {
       sb.writeln('### ⚠️ Bug Hotspots Detected');
-      sb.writeln('This PR modifies files with a history of bug fixes. Reviewers should be extra cautious.');
-      sb.writeln('> **Citation & Explanation**: *Śliwerski, Zimmermann, and Zeller (2005) - SZZ Algorithm.* Files that frequently required fixes in the past are highly likely to contain future bugs.');
+      sb.writeln(
+        'This PR modifies files with a history of bug fixes. Reviewers should be extra cautious.',
+      );
+      sb.writeln(
+        '> **Citation & Explanation**: *Śliwerski, Zimmermann, and Zeller (2005) - SZZ Algorithm.* Files that frequently required fixes in the past are highly likely to contain future bugs.',
+      );
       for (final match in bugHotspots) {
-        sb.writeln('- **`${match.introducingCommitHash}`**: Fixed in `${match.fixingCommitHash}` (File: `${match.filePath}`)');
+        sb.writeln(
+          '- **`${match.introducingCommitHash}`**: Fixed in `${match.fixingCommitHash}` (File: `${match.filePath}`)',
+        );
       }
       sb.writeln('');
     }
 
     if (highlyVolatileFiles.isNotEmpty) {
       sb.writeln('### ⚠️ Highly Volatile Files Detected');
-      sb.writeln('This PR modifies highly volatile files (constantly rewritten/churned).');
-      sb.writeln('Consider looking for deeper architectural or structural issues.');
-      sb.writeln('> **Citation & Explanation**: *Nagappan & Ball (2005).* High relative code churn implies active, unstable code that correlates strongly with defect density.');
+      sb.writeln(
+        'This PR modifies highly volatile files (constantly rewritten/churned).',
+      );
+      sb.writeln(
+        'Consider looking for deeper architectural or structural issues.',
+      );
+      sb.writeln(
+        '> **Citation & Explanation**: *Nagappan & Ball (2005).* High relative code churn implies active, unstable code that correlates strongly with defect density.',
+      );
       for (final v in highlyVolatileFiles) {
         sb.writeln('- **`${v.filePath}`**');
         sb.writeln('  - Historical changes: ${v.totalChanges}');
         sb.writeln('  - Unique authors: ${v.uniqueAuthors}');
-        sb.writeln('  - Volatility Score: ${v.volatilityScore.toStringAsFixed(2)}');
+        sb.writeln(
+          '  - Volatility Score: ${v.volatilityScore.toStringAsFixed(2)}',
+        );
       }
       sb.writeln('');
     }
   }
 
   sb.writeln('### PR Churn Metrics');
-  sb.writeln('> **Citation & Explanation**: *Nagappan & Ball (2005).* The raw number of commits and authors modifying a file within the PR scope.');
+  sb.writeln(
+    '> **Citation & Explanation**: *Nagappan & Ball (2005).* The raw number of commits and authors modifying a file within the PR scope.',
+  );
   sb.writeln('Total PR Commits: ${churnMetrics.totalCommits}');
   for (final fileChurn in churnMetrics.fileChurn.entries) {
-    sb.writeln('- **`${fileChurn.key}`**: ${fileChurn.value.total} changes by ${fileChurn.value.authors.length} authors in this PR.');
+    sb.writeln(
+      '- **`${fileChurn.key}`**: ${fileChurn.value.total} changes by ${fileChurn.value.authors.length} authors in this PR.',
+    );
   }
 
   sb.writeln('');
   sb.writeln('### Repository Bus Factor');
-  sb.writeln('> **Citation & Explanation**: *Avelino et al. (2016).* A measure of knowledge concentration. A low bus factor indicates key developers hold critical, undocumented project knowledge.');
-  sb.writeln('The repository Bus Factor is **${busFactorResult.busFactor}** (out of ${busFactorResult.totalDevelopers} total developers).');
+  sb.writeln(
+    '> **Citation & Explanation**: *Avelino et al. (2016).* A measure of knowledge concentration. A low bus factor indicates key developers hold critical, undocumented project knowledge.',
+  );
+  sb.writeln(
+    'The repository Bus Factor is **${busFactorResult.busFactor}** (out of ${busFactorResult.totalDevelopers} total developers).',
+  );
   sb.writeln('Top contributors driving this project:');
   for (final contributor in busFactorResult.topContributors) {
     final percentage = (contributor.percentage * 100).toStringAsFixed(1);
-    sb.writeln('- **`${contributor.author}`**: ${contributor.contributions} commits ($percentage%)');
+    sb.writeln(
+      '- **`${contributor.author}`**: ${contributor.contributions} commits ($percentage%)',
+    );
   }
 
   final reportMarkdown = sb.toString();

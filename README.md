@@ -116,3 +116,8 @@ jobs:
 | `bug-hotspots-count` | Number of bug hotspots touched by the PR. |
 | `volatile-files-count`| Number of highly volatile files touched by the PR. |
 | `bus-factor-score`| The bus factor score for the repository. |
+| `tribal-knowledge-count` | Number of files flagged for tribal knowledge risk. |
+| `too-many-cooks-count` | Number of files flagged for too many cooks risk. |
+| `departure-defect-count` | Number of authors flagged for departure defect risk. |
+| `defect-injection-count` | Number of files flagged as defect-injection predictors. |
+| `clean-up-exception-count` | Number of highly volatile files safely explained by recent refactorings. |

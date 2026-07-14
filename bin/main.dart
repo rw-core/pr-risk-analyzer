@@ -49,6 +49,12 @@ Future<void> main() async {
     GitHub.writeOutputs({
       'bug-hotspots-count': '0',
       'volatile-files-count': '0',
+      'bus-factor-score': '0',
+      'tribal-knowledge-count': '0',
+      'too-many-cooks-count': '0',
+      'departure-defect-count': '0',
+      'defect-injection-count': '0',
+      'clean-up-exception-count': '0',
     });
     GitHub.writeStepSummary('✅ No files modified in this PR.');
     return;
@@ -190,6 +196,14 @@ Future<void> main() async {
   }
 
   final departureDefectAuthors = singleOwnerFiles.entries.where((e) => e.value.length >= 2).toList();
+
+  GitHub.writeOutputs({
+    'tribal-knowledge-count': '${tribalKnowledgeFiles.length}',
+    'too-many-cooks-count': '${tooManyCooksFiles.length}',
+    'departure-defect-count': '${departureDefectAuthors.length}',
+    'defect-injection-count': '${defectInjectionFiles.length}',
+    'clean-up-exception-count': '${cleanUpExceptionFiles.length}',
+  });
 
   // --- REPORT GENERATION ---
   final sb = StringBuffer();

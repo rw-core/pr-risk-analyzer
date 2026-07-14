@@ -35,6 +35,21 @@ outputs:
   bus-factor-score:
     description: The bus factor score for the repository.
     value: ${{ steps.gate.outputs.bus-factor-score }}
+  tribal-knowledge-count:
+    description: Number of files flagged for tribal knowledge risk.
+    value: ${{ steps.gate.outputs.tribal-knowledge-count }}
+  too-many-cooks-count:
+    description: Number of files flagged for too many cooks risk.
+    value: ${{ steps.gate.outputs.too-many-cooks-count }}
+  departure-defect-count:
+    description: Number of authors flagged for departure defect risk.
+    value: ${{ steps.gate.outputs.departure-defect-count }}
+  defect-injection-count:
+    description: Number of files flagged as defect-injection predictors.
+    value: ${{ steps.gate.outputs.defect-injection-count }}
+  clean-up-exception-count:
+    description: Number of highly volatile files safely explained by recent refactorings.
+    value: ${{ steps.gate.outputs.clean-up-exception-count }}
 
 runs:
   using: composite

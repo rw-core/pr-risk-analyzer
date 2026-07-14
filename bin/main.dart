@@ -112,11 +112,13 @@ Future<void> main() async {
       'busFactor': entry.value.busFactor,
       'totalDevelopers': entry.value.totalDevelopers,
       'topContributors': entry.value.topContributors
-          .map((c) => {
-                'author': c.author,
-                'contributions': c.contributions,
-                'percentage': c.percentage,
-              })
+          .map(
+            (c) => {
+              'author': c.author,
+              'contributions': c.contributions,
+              'percentage': c.percentage,
+            },
+          )
           .toList(),
     };
   }

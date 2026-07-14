@@ -1,5 +1,5 @@
+import 'dart:convert';
 import 'dart:io';
-
 import 'package:pr_risk_analyzer/src/github.dart';
 import 'package:rw_git/rw_git.dart';
 
@@ -101,12 +101,30 @@ Future<void> main() async {
   // --- BUS FACTOR ANALYSIS ---
   stdout.writeln('Running Bus Factor Analysis...');
   final busFactorAlgorithm = BusFactorAlgorithm(runner);
-  final busFactorResult = await busFactorAlgorithm.execute(repositoryPath);
+  final busFactorResult = await busFactorAlgorithm.executeForFiles(
+    repositoryPath,
+    modifiedFiles,
+  );
+
+  final busFactorScores = <String, dynamic>{};
+  for (final entry in busFactorResult.entries) {
+    busFactorScores[entry.key] = {
+      'busFactor': entry.value.busFactor,
+      'totalDevelopers': entry.value.totalDevelopers,
+      'topContributors': entry.value.topContributors
+          .map((c) => {
+                'author': c.author,
+                'contributions': c.contributions,
+                'percentage': c.percentage,
+              })
+          .toList(),
+    };
+  }
 
   GitHub.writeOutputs({
     'bug-hotspots-count': '${bugHotspots.length}',
     'volatile-files-count': '${highlyVolatileFiles.length}',
-    'bus-factor-score': '${busFactorResult.busFactor}',
+    'bus-factor-score': jsonEncode(busFactorScores),
   });
 
   // --- COMPOUND RISKS ANALYSIS ---
@@ -393,19 +411,30 @@ Future<void> main() async {
   }
 
   sb.writeln('');
-  sb.writeln('### Repository Bus Factor');
+  sb.writeln('### PR Files Bus Factor');
   sb.writeln(
     '> **Citation & Explanation**: *Avelino et al. (2016).* A measure of knowledge concentration. A low bus factor indicates key developers hold critical, undocumented project knowledge.',
   );
-  sb.writeln(
-    'The repository Bus Factor is **${busFactorResult.busFactor}** (out of ${busFactorResult.totalDevelopers} total developers).',
-  );
-  sb.writeln('Top contributors driving this project:');
-  for (final contributor in busFactorResult.topContributors) {
-    final percentage = (contributor.percentage * 100).toStringAsFixed(1);
-    sb.writeln(
-      '- **`${contributor.author}`**: ${contributor.contributions} commits ($percentage%)',
-    );
+  if (busFactorResult.isEmpty) {
+    sb.writeln('No bus factor data available for the modified files.');
+  } else {
+    for (final entry in busFactorResult.entries) {
+      final file = entry.key;
+      final bf = entry.value;
+      if (bf.totalDevelopers == 0) {
+        sb.writeln('- **`$file`**: Not enough history.');
+      } else {
+        sb.writeln(
+          '- **`$file`**: Bus Factor **${bf.busFactor}** (out of ${bf.totalDevelopers} developers)',
+        );
+        for (final contributor in bf.topContributors) {
+          final percentage = (contributor.percentage * 100).toStringAsFixed(1);
+          sb.writeln(
+            '  - `${contributor.author}`: ${contributor.contributions} commits ($percentage%)',
+          );
+        }
+      }
+    }
   }
 
   final reportMarkdown = sb.toString();

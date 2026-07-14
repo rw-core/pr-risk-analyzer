@@ -16,7 +16,7 @@ A GitHub Action that analyzes pull requests for historical risk factors. It uses
 ### 🚀 Core Metrics
 - 🪲 **Bug Hotspots Detection (RA-SZZ)**: Evaluates the files modified in the PR against the repository's history to identify files that frequently caused bugs in the past (using the Refactoring-Aware SZZ algorithm).
 - 📈 **Code Volatility Warning**: Identifies highly volatile files modified in the PR (files with high churn across many different authors), which often point to underlying architectural problems.
-- 🚌 **Bus Factor Analysis**: Analyzes the repository's bus factor (the minimum number of developers whose loss would stall the project), evaluating overall knowledge distribution based on commit history.
+- 🚌 **Bus Factor Analysis**: Analyzes the bus factor individually for each file modified in the PR, evaluating knowledge distribution and potential single points of failure based on the full commit history of those specific files.
 - 🔄 **PR Churn Metrics**: Calculates commit and author churn specifically for the pull request's revision range.
 
 ### 🧠 Compound Risks Analysis
@@ -68,10 +68,12 @@ When risks are detected, the action posts a detailed sticky comment on the PR:
 > **Total PR Commits: 14**
 > - **`lib/core/legacy_payment_gateway.dart`**: 8 changes by 2 authors in this PR.
 > 
-> #### 🚌 Repository Bus Factor
+> #### 🚌 PR Files Bus Factor
 > > **Citation & Explanation**: *Avelino et al. (2016).* A measure of knowledge concentration. A low bus factor indicates key developers hold critical, undocumented project knowledge.
 > 
-> The repository Bus Factor is **3** (out of 12 total developers).
+> - **`lib/core/legacy_payment_gateway.dart`**: Bus Factor **1** (out of 3 developers)
+>   - `john.doe`: 45 commits (65.2%)
+>   - `jane.smith`: 12 commits (17.4%)
 
 ## Usage
 
@@ -115,7 +117,7 @@ jobs:
 |------|-------------|
 | `bug-hotspots-count` | Number of bug hotspots touched by the PR. |
 | `volatile-files-count`| Number of highly volatile files touched by the PR. |
-| `bus-factor-score`| The bus factor score for the repository. |
+| `bus-factor-score`| A JSON string mapping each modified file to an object containing its bus factor, total developers, and top contributors. |
 | `tribal-knowledge-count` | Number of files flagged for tribal knowledge risk. |
 | `too-many-cooks-count` | Number of files flagged for too many cooks risk. |
 | `departure-defect-count` | Number of authors flagged for departure defect risk. |

@@ -32,7 +32,7 @@ outputs:
     description: Number of highly volatile files touched by the PR.
     value: ${{ steps.gate.outputs.volatile-files-count }}
   bus-factor-score:
-    description: The bus factor score for the repository.
+    description: A JSON string mapping each modified file to an object containing its bus factor, total developers, and top contributors.
     value: ${{ steps.gate.outputs.bus-factor-score }}
   tribal-knowledge-count:
     description: Number of files flagged for tribal knowledge risk.

@@ -1,6 +1,6 @@
 name: PR Risk Analyzer
 description: >-
-  A Github Action that identifies files that are bug hotspots, or have high volatility and churn.
+  A Github Action that identifies bus factor, bug hotspots, high volatility and churn.
 author: rw-core
 branding:
   icon: alert-circle

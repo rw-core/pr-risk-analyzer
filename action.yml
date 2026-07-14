@@ -1,0 +1,66 @@
+name: PR Risk Analyzer
+description: >-
+  Language-agnostic action that uses rw_git to identify if a pull request modifies
+  historical bug hotspots or highly volatile files.
+author: rw-core
+branding:
+  icon: alert-circle
+  color: orange
+
+inputs:
+  github-token:
+    description: Token used to post the sticky PR comment (needs pull-requests:write).
+    required: false
+    default: ${{ github.token }}
+  working-directory:
+    description: Path (relative to the checkout) of the repository root to analyse.
+    required: false
+    default: '.'
+  volatility-threshold:
+    description: Threshold of volatility score to flag a file as highly volatile.
+    required: false
+    default: '20.0'
+  fail-on-warning:
+    description: When true, exit non-zero if the PR touches any bug hotspots or volatile files.
+    required: false
+    default: 'false'
+
+outputs:
+  bug-hotspots-count:
+    description: Number of bug hotspots touched by the PR.
+    value: ${{ steps.gate.outputs.bug-hotspots-count }}
+  volatile-files-count:
+    description: Number of highly volatile files touched by the PR.
+    value: ${{ steps.gate.outputs.volatile-files-count }}
+  bus-factor-score:
+    description: The bus factor score for the repository.
+    value: ${{ steps.gate.outputs.bus-factor-score }}
+
+runs:
+  using: composite
+  steps:
+    - name: Run pr-risk-analyzer (native binary)
+      id: gate
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/scripts/run.sh"
+      env:
+        ACTION_REPO: ${{ github.action_repository }}
+        ACTION_REF: ${{ github.action_ref }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_VOLATILITY_THRESHOLD: ${{ inputs.volatility-threshold }}
+        INPUT_FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
+
+    - name: Set up Dart (fallback)
+      if: steps.gate.outputs.mode == 'fallback'
+      uses: dart-lang/setup-dart@v1
+    - name: Run pr-risk-analyzer (from source, fallback)
+      if: steps.gate.outputs.mode == 'fallback'
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: dart pub get && dart run bin/main.dart
+      env:
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_VOLATILITY_THRESHOLD: ${{ inputs.volatility-threshold }}
+        INPUT_FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}

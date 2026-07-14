@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest,     os: linux,   arch: x64,   ext: '' }
+          - { runner: macos-13,          os: macos,   arch: x64,   ext: '' }
+          - { runner: macos-latest,      os: macos,   arch: arm64, ext: '' }
+          - { runner: windows-latest,    os: windows, arch: x64,   ext: '.exe' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - shell: bash
+        run: dart pub get
+      - name: Compile native binary + checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="pr-risk-analyzer-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}"
+          mkdir -p dist
+          dart compile exe bin/main.dart -o "dist/${asset}"
+          cd dist
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${asset}" > "${asset}.sha256"
+          else
+            shasum -a 256 "${asset}" > "${asset}.sha256"
+          fi
+          cat "${asset}.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish release + roll major tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"      # e.g. v1.2.3
+          MAJOR="v${TAG#v}"             # normalise to vX.Y.Z → v1.2.3
+          MAJOR="${MAJOR%%.*}"          # strip .Y.Z          → v1
+          ls -la dist
+
+          # Exact-version release (immutable, what users should pin to).
+          gh release create "$TAG" dist/* \
+            --title "$TAG" --generate-notes || \
+            gh release upload "$TAG" dist/* --clobber
+
+          # Rolling major-version release so `@v1` also gets the fast path.
+          git tag -f "$MAJOR"
+          git push -f origin "$MAJOR"
+          gh release delete "$MAJOR" --yes --cleanup-tag=false 2>/dev/null || true
+          gh release create "$MAJOR" dist/* \
+            --title "$MAJOR (rolling)" \
+            --notes "Rolling release; tracks the latest $MAJOR.x. Pin to $TAG for immutability."

@@ -159,6 +159,7 @@ Future<void> main() async {
     final churnMetrics = await churn.calculateChurnWithAuthors(
       repositoryPath,
       revisionRange: revisionRange,
+      targetFiles: modifiedFiles,
     );
 
     // --- CODE VOLATILITY WARNING ---
@@ -170,15 +171,12 @@ Future<void> main() async {
       since: historySinceIso,
     );
 
-    // Filter volatile files by threshold, and re-scope to files actually
-    // modified by this PR (git's pathspec only filters commits, not the
-    // per-commit file list `--name-only` reports — see modifiedFilesSet).
+    // Filter volatile files by threshold. `targetFiles` above already
+    // scopes results to modifiedFiles exactly (rw_git re-filters its own
+    // git-log output, since git's pathspec only restricts which commits are
+    // shown, not each commit's file list).
     final highlyVolatileFiles = volatileFiles
-        .where(
-          (v) =>
-              v.volatilityScore > volatilityThreshold &&
-              modifiedFilesSet.contains(v.filePath),
-        )
+        .where((v) => v.volatilityScore > volatilityThreshold)
         .toList();
 
     // --- BUS FACTOR ANALYSIS ---
@@ -382,7 +380,6 @@ Future<void> main() async {
       }
     }
     for (final entry in churnMetrics.fileChurn.entries) {
-      if (!modifiedFilesSet.contains(entry.key)) continue;
       final s = fileSummaries[entry.key];
       if (s == null) continue;
       s.keyStat ??=
@@ -598,11 +595,6 @@ Future<void> main() async {
     details.writeln('### PR Churn Metrics');
     details.writeln('Total PR Commits: ${churnMetrics.totalCommits}');
     for (final fileChurn in churnMetrics.fileChurn.entries) {
-      // `calculateChurnWithAuthors` has no pathspec support at all: it lists
-      // every file touched by every commit in the PR's revision range,
-      // which includes files pulled in by e.g. merge commits. Re-scope to
-      // the PR's actual diff.
-      if (!modifiedFilesSet.contains(fileChurn.key)) continue;
       details.writeln(
         '- **`${fileChurn.key}`**: ${fileChurn.value.total} changes by ${fileChurn.value.authors.length} authors in this PR.',
       );

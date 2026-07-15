@@ -3,6 +3,15 @@ import 'dart:io';
 import 'package:pr_risk_analyzer/src/github.dart';
 import 'package:rw_git/rw_git.dart';
 
+/// One row of the PR comment's summary table: every risk signal that landed
+/// on a given file, collapsed into a single badge set + one headline stat,
+/// instead of the file being repeated once per section.
+class _FileSummary {
+  final Set<String> badges = {};
+  String? keyStat;
+  String? topAuthor;
+}
+
 Future<void> main() async {
   final env = Platform.environment;
 
@@ -88,6 +97,11 @@ Future<void> main() async {
       .map((l) => l.trim())
       .where((l) => l.isNotEmpty)
       .toList();
+  // Ground truth for "modified by this PR". `git log -- <pathspec>` only
+  // restricts which *commits* appear; `--name-only`/`--stat` still lists
+  // every file each surviving commit touched, so every heuristic below is
+  // re-filtered against this set rather than trusted to have scoped itself.
+  final modifiedFilesSet = modifiedFiles.toSet();
 
   if (modifiedFiles.isEmpty) {
     stdout.writeln('No modified files found in PR. Exiting.');
@@ -119,7 +133,12 @@ Future<void> main() async {
   };
 
   var hasWarnings = false;
-  final findings = StringBuffer();
+  // `summary` is the always-visible headline (verdict + per-file table +
+  // author-centric compound risks). `details`/`reference` hold the
+  // exhaustive breakdown and citations, rendered inside collapsed
+  // <details> so they don't push the headline off-screen.
+  final summary = StringBuffer();
+  final details = StringBuffer();
   final reference = StringBuffer();
   Object? failure;
   StackTrace? failureStackTrace;
@@ -128,11 +147,11 @@ Future<void> main() async {
     // --- BUG HOTSPOTS WARNING ---
     stdout.writeln('Running Bug Hotspots Check...');
     final szz = SzzAlgorithm(runner);
-    final bugHotspots = await szz.execute(
+    final bugHotspots = (await szz.execute(
       repositoryPath,
       targetFiles: modifiedFiles,
       since: historySinceIso,
-    );
+    )).where((m) => modifiedFilesSet.contains(m.filePath)).toList();
 
     // --- CHURN HEURISTIC ---
     stdout.writeln('Running PR Churn Check...');
@@ -151,9 +170,15 @@ Future<void> main() async {
       since: historySinceIso,
     );
 
-    // Filter volatile files by threshold
+    // Filter volatile files by threshold, and re-scope to files actually
+    // modified by this PR (git's pathspec only filters commits, not the
+    // per-commit file list `--name-only` reports — see modifiedFilesSet).
     final highlyVolatileFiles = volatileFiles
-        .where((v) => v.volatilityScore > volatilityThreshold)
+        .where(
+          (v) =>
+              v.volatilityScore > volatilityThreshold &&
+              modifiedFilesSet.contains(v.filePath),
+        )
         .toList();
 
     // --- BUS FACTOR ANALYSIS ---
@@ -304,9 +329,10 @@ Future<void> main() async {
     outputs['clean-up-exception-count'] = '${cleanUpExceptionFiles.length}';
 
     // --- REPORT GENERATION ---
-    // Findings are surfaced first so reviewers see the actionable results
-    // immediately; the methodology/citations backing each finding are moved
-    // to a "References" section at the bottom.
+    // A per-file summary table is the primary, always-visible content so a
+    // file with multiple signals gets exactly one row instead of being
+    // repeated once per section. Exhaustive detail (raw commit hashes, full
+    // contributor breakdowns) and citations move into collapsed <details>.
     hasWarnings = bugHotspots.isNotEmpty || highlyVolatileFiles.isNotEmpty;
 
     final hasCompoundRisks =
@@ -316,56 +342,159 @@ Future<void> main() async {
         defectInjectionFiles.isNotEmpty ||
         cleanUpExceptionFiles.isNotEmpty;
 
+    final fileSummaries = <String, _FileSummary>{};
+    _FileSummary summaryFor(String file) =>
+        fileSummaries.putIfAbsent(file, () => _FileSummary());
+
+    for (final match in bugHotspots) {
+      summaryFor(match.filePath).badges.add('🐛 Hotspot');
+    }
+    for (final v in highlyVolatileFiles) {
+      final s = summaryFor(v.filePath);
+      s.badges.add('📈 Volatile');
+      s.keyStat ??=
+          'Volatility ${v.volatilityScore.toStringAsFixed(1)} '
+          '(${v.totalChanges} changes, ${v.uniqueAuthors} authors)';
+    }
+    for (final f in tribalKnowledgeFiles) {
+      summaryFor(f).badges.add('🎯 Tribal Knowledge');
+    }
+    for (final f in tooManyCooksFiles) {
+      summaryFor(f).badges.add('🟠 Too Many Cooks');
+    }
+    for (final f in defectInjectionFiles) {
+      summaryFor(f).badges.add('🔴 Defect-Injection');
+    }
+    for (final f in cleanUpExceptionFiles) {
+      summaryFor(f).badges.add('🟢 Clean-up Exception');
+    }
+    // Bus factor / churn only backfill the key stat + top author for files
+    // already flagged above — they aren't risk signals on their own.
+    for (final entry in busFactorResult.entries) {
+      final s = fileSummaries[entry.key];
+      if (s == null || entry.value.totalDevelopers == 0) continue;
+      s.keyStat ??=
+          'Bus factor ${entry.value.busFactor}/${entry.value.totalDevelopers}';
+      if (entry.value.topContributors.isNotEmpty) {
+        final top = entry.value.topContributors.first;
+        s.topAuthor ??=
+            '${top.author} (${(top.percentage * 100).toStringAsFixed(0)}%)';
+      }
+    }
+    for (final entry in churnMetrics.fileChurn.entries) {
+      if (!modifiedFilesSet.contains(entry.key)) continue;
+      final s = fileSummaries[entry.key];
+      if (s == null) continue;
+      s.keyStat ??=
+          '${entry.value.total} changes by '
+          '${entry.value.authors.length} authors (this PR)';
+    }
+
+    final sortedFiles = fileSummaries.entries.toList()
+      ..sort((a, b) {
+        final byBadgeCount = b.value.badges.length.compareTo(
+          a.value.badges.length,
+        );
+        return byBadgeCount != 0 ? byBadgeCount : a.key.compareTo(b.key);
+      });
+
+    if (sortedFiles.isEmpty && departureDefectAuthors.isEmpty) {
+      summary.writeln('✅ No risks detected in this PR.');
+    } else {
+      final verdictParts = <String>[];
+      if (sortedFiles.isNotEmpty) {
+        verdictParts.add('${sortedFiles.length} file(s) flagged');
+      }
+      if (departureDefectAuthors.isNotEmpty) {
+        verdictParts.add('${departureDefectAuthors.length} departure risk(s)');
+      }
+      summary.writeln('🔴 ${verdictParts.join(', ')}.');
+    }
+    summary.writeln('');
+
+    if (sortedFiles.isNotEmpty) {
+      summary.writeln('### Summary');
+      summary.writeln('| File | Signals | Key Stat | Top Author |');
+      summary.writeln('|---|---|---|---|');
+      const maxSummaryRows = 15;
+      for (final entry in sortedFiles.take(maxSummaryRows)) {
+        summary.writeln(
+          '| `${entry.key}` | ${entry.value.badges.join(" · ")} | '
+          '${entry.value.keyStat ?? '—'} | ${entry.value.topAuthor ?? '—'} |',
+        );
+      }
+      if (sortedFiles.length > maxSummaryRows) {
+        summary.writeln(
+          '\n_+${sortedFiles.length - maxSummaryRows} more file(s) — see '
+          'full metrics below._',
+        );
+      }
+      summary.writeln('');
+    }
+
+    // Departure risk is about an author owning multiple files, not a
+    // per-file stat, so it doesn't compress into a table row — it stays as
+    // a short standalone bullet in the visible summary.
+    if (departureDefectAuthors.isNotEmpty) {
+      summary.writeln('### Compound Risks');
+      for (final entry in departureDefectAuthors) {
+        summary.writeln(
+          '- 🔴 **Departure risk**: `${entry.key}` solely owns '
+          '${entry.value.length} hotspot files — '
+          '${entry.value.map((f) => '`$f`').join(', ')}',
+        );
+      }
+      summary.writeln('');
+    }
+
     if (hasCompoundRisks) {
-      findings.writeln('### 🎯 Compound PR Risks');
+      details.writeln('### 🎯 Compound PR Risks');
 
       if (tribalKnowledgeFiles.isNotEmpty) {
-        findings.writeln('**🔴 Tribal Knowledge Risk**');
+        details.writeln('**🔴 Tribal Knowledge Risk**');
         for (final f in tribalKnowledgeFiles) {
-          findings.writeln('- **`$f`**');
+          details.writeln('- **`$f`**');
         }
-        findings.writeln('');
+        details.writeln('');
       }
 
       if (tooManyCooksFiles.isNotEmpty) {
-        findings.writeln('**🟠 Too Many Cooks Risk**');
+        details.writeln('**🟠 Too Many Cooks Risk**');
         for (final f in tooManyCooksFiles) {
-          findings.writeln('- **`$f`**');
+          details.writeln('- **`$f`**');
         }
-        findings.writeln('');
+        details.writeln('');
       }
 
       if (departureDefectAuthors.isNotEmpty) {
-        findings.writeln('**🔴 Departure Defect Risk**');
+        details.writeln('**🔴 Departure Defect Risk**');
         for (final entry in departureDefectAuthors) {
-          findings.writeln(
+          details.writeln(
             '- **`${entry.key}`** owns ${entry.value.length} hotspot files:',
           );
           for (final f in entry.value) {
-            findings.writeln('  - `$f`');
+            details.writeln('  - `$f`');
           }
         }
-        findings.writeln('');
+        details.writeln('');
       }
 
       if (defectInjectionFiles.isNotEmpty) {
-        findings.writeln(
+        details.writeln(
           '**🔴 Defect-Injection Predictor (Refactoring Targets)**',
         );
         for (final f in defectInjectionFiles) {
-          findings.writeln('- **`$f`**');
+          details.writeln('- **`$f`**');
         }
-        findings.writeln('');
+        details.writeln('');
       }
 
       if (cleanUpExceptionFiles.isNotEmpty) {
-        findings.writeln('**🟢 Clean-up Exception**');
+        details.writeln('**🟢 Clean-up Exception**');
         for (final f in cleanUpExceptionFiles) {
-          findings.writeln(
-            '- **`$f`** (Volatility warnings can be downgraded)',
-          );
+          details.writeln('- **`$f`** (Volatility warnings can be downgraded)');
         }
-        findings.writeln('');
+        details.writeln('');
       }
 
       reference.writeln('### 🎯 Compound PR Risks');
@@ -426,91 +555,90 @@ Future<void> main() async {
       );
     }
 
-    if (!hasWarnings) {
-      findings.writeln(
-        '✅ No bug hotspots or highly volatile files detected in this PR.',
+    if (bugHotspots.isNotEmpty) {
+      details.writeln('### ⚠️ Bug Hotspots Detected');
+      for (final match in bugHotspots) {
+        details.writeln(
+          '- **`${match.introducingCommitHash}`**: Fixed in `${match.fixingCommitHash}` (File: `${match.filePath}`)',
+        );
+      }
+      details.writeln('');
+
+      reference.writeln('### ⚠️ Bug Hotspots Detected');
+      reference.writeln(
+        'This PR modifies files with a history of bug fixes. Reviewers should be extra cautious.',
       );
-    } else {
-      if (bugHotspots.isNotEmpty) {
-        findings.writeln('### ⚠️ Bug Hotspots Detected');
-        for (final match in bugHotspots) {
-          findings.writeln(
-            '- **`${match.introducingCommitHash}`**: Fixed in `${match.fixingCommitHash}` (File: `${match.filePath}`)',
-          );
-        }
-        findings.writeln('');
-
-        reference.writeln('### ⚠️ Bug Hotspots Detected');
-        reference.writeln(
-          'This PR modifies files with a history of bug fixes. Reviewers should be extra cautious.',
-        );
-        reference.writeln(
-          '> **Citation & Explanation**: *Śliwerski, Zimmermann, and Zeller (2005) - SZZ Algorithm.* Files that frequently required fixes in the past are highly likely to contain future bugs.\n',
-        );
-      }
-
-      if (highlyVolatileFiles.isNotEmpty) {
-        findings.writeln('### ⚠️ Highly Volatile Files Detected');
-        for (final v in highlyVolatileFiles) {
-          findings.writeln('- **`${v.filePath}`**');
-          findings.writeln('  - Historical changes: ${v.totalChanges}');
-          findings.writeln('  - Unique authors: ${v.uniqueAuthors}');
-          findings.writeln(
-            '  - Volatility Score: ${v.volatilityScore.toStringAsFixed(2)}',
-          );
-        }
-        findings.writeln('');
-
-        reference.writeln('### ⚠️ Highly Volatile Files Detected');
-        reference.writeln(
-          'This PR modifies highly volatile files (constantly rewritten/churned). '
-          'Consider looking for deeper architectural or structural issues.',
-        );
-        reference.writeln(
-          '> **Citation & Explanation**: *Nagappan & Ball (2005).* High relative code churn implies active, unstable code that correlates strongly with defect density.\n',
-        );
-      }
+      reference.writeln(
+        '> **Citation & Explanation**: *Śliwerski, Zimmermann, and Zeller (2005) - SZZ Algorithm.* Files that frequently required fixes in the past are highly likely to contain future bugs.\n',
+      );
     }
 
-    findings.writeln('### PR Churn Metrics');
-    findings.writeln('Total PR Commits: ${churnMetrics.totalCommits}');
+    if (highlyVolatileFiles.isNotEmpty) {
+      details.writeln('### ⚠️ Highly Volatile Files Detected');
+      for (final v in highlyVolatileFiles) {
+        details.writeln('- **`${v.filePath}`**');
+        details.writeln('  - Historical changes: ${v.totalChanges}');
+        details.writeln('  - Unique authors: ${v.uniqueAuthors}');
+        details.writeln(
+          '  - Volatility Score: ${v.volatilityScore.toStringAsFixed(2)}',
+        );
+      }
+      details.writeln('');
+
+      reference.writeln('### ⚠️ Highly Volatile Files Detected');
+      reference.writeln(
+        'This PR modifies highly volatile files (constantly rewritten/churned). '
+        'Consider looking for deeper architectural or structural issues.',
+      );
+      reference.writeln(
+        '> **Citation & Explanation**: *Nagappan & Ball (2005).* High relative code churn implies active, unstable code that correlates strongly with defect density.\n',
+      );
+    }
+
+    details.writeln('### PR Churn Metrics');
+    details.writeln('Total PR Commits: ${churnMetrics.totalCommits}');
     for (final fileChurn in churnMetrics.fileChurn.entries) {
-      findings.writeln(
+      // `calculateChurnWithAuthors` has no pathspec support at all: it lists
+      // every file touched by every commit in the PR's revision range,
+      // which includes files pulled in by e.g. merge commits. Re-scope to
+      // the PR's actual diff.
+      if (!modifiedFilesSet.contains(fileChurn.key)) continue;
+      details.writeln(
         '- **`${fileChurn.key}`**: ${fileChurn.value.total} changes by ${fileChurn.value.authors.length} authors in this PR.',
       );
     }
-    findings.writeln('');
+    details.writeln('');
 
     reference.writeln('### PR Churn Metrics');
     reference.writeln(
       '> **Citation & Explanation**: *Nagappan & Ball (2005).* The raw number of commits and authors modifying a file within the PR scope.\n',
     );
 
-    findings.writeln('### PR Files Bus Factor');
+    details.writeln('### PR Files Bus Factor');
     if (busFactorResult.isEmpty) {
-      findings.writeln('No bus factor data available for the modified files.');
+      details.writeln('No bus factor data available for the modified files.');
     } else {
       for (final entry in busFactorResult.entries) {
         final file = entry.key;
         final bf = entry.value;
         if (bf.totalDevelopers == 0) {
-          findings.writeln('- **`$file`**: Not enough history.');
+          details.writeln('- **`$file`**: Not enough history.');
         } else {
-          findings.writeln(
+          details.writeln(
             '- **`$file`**: Bus Factor **${bf.busFactor}** (out of ${bf.totalDevelopers} developers)',
           );
           for (final contributor in bf.topContributors) {
             final percentage = (contributor.percentage * 100).toStringAsFixed(
               1,
             );
-            findings.writeln(
+            details.writeln(
               '  - `${contributor.author}`: ${contributor.contributions} commits ($percentage%)',
             );
           }
         }
       }
     }
-    findings.writeln('');
+    details.writeln('');
 
     reference.writeln('### PR Files Bus Factor');
     reference.writeln(
@@ -540,11 +668,22 @@ Future<void> main() async {
     );
     reportSb.writeln('');
   }
-  reportSb.write(findings.toString());
+  reportSb.write(summary.toString());
+  if (details.isNotEmpty) {
+    reportSb.writeln('<details>');
+    reportSb.writeln(
+      '<summary>Full metrics (bug-fix commits, volatility, churn, bus '
+      'factor breakdown)</summary>\n',
+    );
+    reportSb.write(details.toString());
+    reportSb.writeln('</details>');
+    reportSb.writeln('');
+  }
   if (reference.isNotEmpty) {
-    reportSb.writeln('---');
-    reportSb.writeln('## References & Methodology');
+    reportSb.writeln('<details>');
+    reportSb.writeln('<summary>References & Methodology</summary>\n');
     reportSb.write(reference.toString());
+    reportSb.writeln('</details>');
   }
 
   final reportMarkdown = reportSb.toString();

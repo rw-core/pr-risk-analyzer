@@ -426,53 +426,51 @@ Future<void> main() async {
         details.writeln('');
       }
 
-      reference.writeln('### 🎯 Compound PR Risks');
+      reference.writeln('#### Compound Risks');
       reference.writeln(
-        'Actionable compound findings identified by combining multiple risk vectors.\n',
+        'Actionable findings produced by combining multiple risk vectors.\n',
       );
-      reference.writeln('**🔴 Tribal Knowledge Risk**');
+      reference.writeln('**Tribal Knowledge Risk**');
       reference.writeln(
-        '- **Condition**: A bug hotspot file is owned by a single author (Bus factor > 50%).',
+        '- **Condition**: A bug hotspot file is owned by a single author (> 50% of commits).',
       );
       reference.writeln(
         '- **Rationale**: Undocumented tribal knowledge in bug-prone code increases the risk of injecting defects if the context is siloed.',
       );
       reference.writeln(
-        '- **Citation**: Avelino et al. (2016) - Knowledge loss and defect proneness.\n',
+        '- **Reference**: Avelino et al. (2016) — *"Developer Turnover and Knowledge Loss in Software Projects."*\n',
       );
-      reference.writeln('**🟠 Too Many Cooks Risk**');
+      reference.writeln('**Too Many Cooks Risk**');
       reference.writeln(
-        '- **Condition**: A bug hotspot file has three or more minor contributors (< 5% ownership).',
+        '- **Condition**: A bug hotspot file has three or more minor contributors (< 5% ownership each).',
       );
       reference.writeln(
         '- **Rationale**: The count of minor contributors is an even stronger defect predictor than ownership concentration itself.',
       );
       reference.writeln(
-        '- **Citation**: Bird et al. (FSE 2011) - Don\'t touch my code: examining the effects of ownership on software quality.\n',
+        '- **Reference**: Bird et al. (FSE 2011) — *"Don\'t Touch My Code! Examining the Effects of Ownership on Software Quality."*\n',
       );
-      reference.writeln('**🔴 Departure Defect Risk**');
+      reference.writeln('**Departure Defect Risk**');
       reference.writeln(
         '- **Condition**: A single author solely owns two or more single-owner bug-hotspot files.',
       );
       reference.writeln(
-        '- **Rationale**: The departure of this specific developer would orphan the most defect-prone code in the repository.',
+        '- **Rationale**: The departure of this developer would orphan the most defect-prone code in the repository.',
       );
       reference.writeln(
-        '- **Citation**: Mockus & Herbsleb (2002); Avelino et al. (2016).\n',
+        '- **Reference**: Mockus & Herbsleb (2002); Avelino et al. (2016).\n',
+      );
+      reference.writeln('**Defect-Injection Predictor**');
+      reference.writeln(
+        '- **Condition**: A highly volatile or high-churn file (> 10 commits in the window) whose diffs also added substantial control-flow complexity (≥ 30 branching tokens).',
       );
       reference.writeln(
-        '**🔴 Defect-Injection Predictor (Refactoring Targets)**',
+        '- **Rationale**: Actively-changing complex code is the prime defect-injection vector. These files are prime refactoring targets.',
       );
       reference.writeln(
-        '- **Condition**: A highly volatile or high-churn file (> 10 commits in the window) whose diffs also added a substantial amount of control-flow complexity (≥ 30 branching tokens).',
+        '- **Reference**: Nagappan & Ball (2005); Tornhill (2015) — *"Your Code as a Crime Scene."*\n',
       );
-      reference.writeln(
-        '- **Rationale**: Actively-changing complex code is the prime defect-injection risk. These are prime refactoring targets.',
-      );
-      reference.writeln(
-        '- **Citation**: Nagappan & Ball (2005); Tornhill (2015) - Prioritizing tech debt in the PR.\n',
-      );
-      reference.writeln('**🟢 Clean-up Exception**');
+      reference.writeln('**Clean-up Exception**');
       reference.writeln(
         '- **Condition**: High volatility/churn on files modified by detected refactorings.',
       );
@@ -480,7 +478,7 @@ Future<void> main() async {
         '- **Rationale**: High churn explained by clean-up and refactoring carries a demonstrably lower defect risk.',
       );
       reference.writeln(
-        '- **Citation**: Neto et al. (SANER 2018) - The Impact of Refactoring Changes on the SZZ Algorithm.\n',
+        '- **Reference**: Neto et al. (SANER 2018) — *"The Impact of Refactoring Changes on the SZZ Algorithm."*\n',
       );
     }
 
@@ -493,12 +491,15 @@ Future<void> main() async {
       }
       details.writeln('');
 
-      reference.writeln('### ⚠️ Bug Hotspots Detected');
+      reference.writeln('#### Bug Hotspots (RA-SZZ)');
       reference.writeln(
-        'This PR modifies files with a history of bug fixes. Reviewers should be extra cautious.',
+        '- **How it\'s derived**: The Refactoring-Aware SZZ algorithm walks `git log` to pair each bug-fixing commit with the commit that originally introduced the defective lines, filtering out refactoring-only changes.',
       );
       reference.writeln(
-        '> **Citation & Explanation**: *Śliwerski, Zimmermann, and Zeller (2005) - SZZ Algorithm.* Files that frequently required fixes in the past are highly likely to contain future bugs.\n',
+        '- **Why it matters**: Files that frequently required fixes in the past are statistically more likely to contain future bugs.',
+      );
+      reference.writeln(
+        '- **Reference**: Śliwerski, Zimmermann, and Zeller (2005) — *"When Do Changes Induce Fixes?" (SZZ Algorithm).*\n',
       );
     }
 
@@ -514,13 +515,15 @@ Future<void> main() async {
       }
       details.writeln('');
 
-      reference.writeln('### ⚠️ Highly Volatile Files Detected');
+      reference.writeln('#### Code Volatility');
       reference.writeln(
-        'This PR modifies highly volatile files (constantly rewritten/churned). '
-        'Consider looking for deeper architectural or structural issues.',
+        '- **How it\'s derived**: Counts the total number of distinct commits and distinct authors that touched each file in the history window, producing a composite volatility score.',
       );
       reference.writeln(
-        '> **Citation & Explanation**: *Nagappan & Ball (2005).* High relative code churn implies active, unstable code that correlates strongly with defect density.\n',
+        '- **Why it matters**: High relative code churn implies active, unstable code that correlates strongly with defect density.',
+      );
+      reference.writeln(
+        '- **Reference**: Nagappan & Ball (2005) — *"Use of Relative Code Churn Measures to Predict System Defect Density."*\n',
       );
     }
 
@@ -533,9 +536,15 @@ Future<void> main() async {
     }
     details.writeln('');
 
-    reference.writeln('### PR Churn Metrics');
+    reference.writeln('#### PR Churn');
     reference.writeln(
-      '> **Citation & Explanation**: *Nagappan & Ball (2005).* The raw number of commits and authors modifying a file within the PR scope.\n',
+      '- **How it\'s derived**: Counts the commits and distinct authors that modified each file within the PR\'s own revision range (`base..head`).',
+    );
+    reference.writeln(
+      '- **Why it matters**: Files touched by many commits or many authors within a single PR are more likely to contain integration defects.',
+    );
+    reference.writeln(
+      '- **Reference**: Nagappan & Ball (2005) — *"Use of Relative Code Churn Measures to Predict System Defect Density."*\n',
     );
 
     details.writeln('### PR Files Bus Factor');
@@ -564,9 +573,34 @@ Future<void> main() async {
     }
     details.writeln('');
 
-    reference.writeln('### PR Files Bus Factor');
+    reference.writeln('#### Bus Factor');
     reference.writeln(
-      '> **Citation & Explanation**: *Avelino et al. (2016).* A measure of knowledge concentration. A low bus factor indicates key developers hold critical, undocumented project knowledge.',
+      '- **How it\'s derived**: For each file, analyses the full commit history to determine how many developers contribute and how concentrated the ownership is.',
+    );
+    reference.writeln(
+      '- **Why it matters**: A low bus factor indicates that critical, undocumented project knowledge is concentrated in very few developers.',
+    );
+    reference.writeln(
+      '- **Reference**: Avelino et al. (2016) — *"Developer Turnover and Knowledge Loss in Software Projects."*\n',
+    );
+
+    // --- HOW THIS ACTION WORKS (closing section) ---
+    reference.writeln('---\n');
+    reference.writeln('#### How This Action Works');
+    reference.writeln(
+      'PR Risk Analyzer examines the `git log` history of every file modified in the pull request. '
+      'The history window is bounded to **$historyDays days** preceding the PR\'s base commit, '
+      'ensuring reproducible results regardless of when CI re-runs.\n',
+    );
+    reference.writeln(
+      'All metrics are computed exclusively from git metadata (commit hashes, authors, timestamps, '
+      'and diffs). No source code parsing or external service calls are required.\n',
+    );
+    reference.writeln(
+      'The core metrics — bug hotspots, code volatility, churn, and bus factor — are then '
+      'combined to produce compound risk signals (tribal knowledge, too many cooks, departure '
+      'defect, defect-injection predictor, and clean-up exception) that surface the highest-impact '
+      'findings for reviewers.',
     );
   } catch (e, st) {
     failure = e;

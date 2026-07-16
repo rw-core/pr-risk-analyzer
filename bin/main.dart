@@ -648,7 +648,11 @@ Future<void> main() async {
     final number = GitHub.prNumber(eventPath);
     final repository = env['GITHUB_REPOSITORY'];
     if (number != null && repository != null) {
-      final gh = GitHub(token: token, repository: repository);
+      final gh = GitHub(
+        token: token,
+        repository: repository,
+        apiUrl: env['GITHUB_API_URL'],
+      );
       try {
         await gh.upsertStickyComment(number, reportMarkdown);
       } catch (e) {

@@ -614,9 +614,7 @@ Future<void> main() async {
 
   final reportSb = StringBuffer();
   reportSb.writeln('## PR Risk Analyzer Report');
-  reportSb.writeln(
-    '**History window scanned**: `$historyRangeLabel` ',
-  );
+  reportSb.writeln('**History window scanned**: `$historyRangeLabel` ');
   reportSb.writeln('');
   if (failure != null) {
     reportSb.writeln(

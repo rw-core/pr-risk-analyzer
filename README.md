@@ -46,7 +46,7 @@ When risks are detected, the action posts a detailed sticky comment on the PR:
 > - **`lib/core/legacy_payment_gateway.dart`**
 > 
 > #### 🔴 Defect-Injection Predictor (Refactoring Targets)
-> **Condition**: High churn combined with a high complexity outlier on the same file (product > 0.25).<br>
+> **Condition**: A highly volatile or high-churn file (> 10 commits in the window) whose diffs also added a substantial amount of control-flow complexity (≥ 30 branching tokens).<br>
 > **Rationale**: Actively-changing complex code is the prime defect-injection risk. These are prime refactoring targets.
 > > **Citation**: Nagappan & Ball (2005); Tornhill (2015) - Prioritizing tech debt in the PR.
 > 

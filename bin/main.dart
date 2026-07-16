@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:pr_risk_analyzer/src/github.dart';
+import 'package:pr_risk_analyzer/src/risk_rules.dart';
 import 'package:rw_git/rw_git.dart';
 
 /// One row of the PR comment's summary table: every risk signal that landed
@@ -77,12 +78,17 @@ Future<void> main() async {
       '${baseDate.toIso8601String().split('T').first}';
 
   // --- GET MODIFIED FILES ---
+  // `git diff A B` (two trees, as separate args) compares snapshots
+  // directly: if base has since moved forward with unrelated commits, every
+  // file that changed on base after the PR branched shows up too, since the
+  // PR's tree never picked those changes up either. `git diff A...B`
+  // (single arg, three dots) diffs against the merge-base instead, matching
+  // what GitHub's "Files changed" tab actually shows.
   stdout.writeln('Fetching PR modified files...');
   final diffRes = await runner.run('git', [
     'diff',
     '--name-only',
-    prBaseSha,
-    prHeadSha,
+    '$prBaseSha...$prHeadSha',
   ], workingDirectory: repositoryPath);
   if (diffRes.exitCode != 0) {
     stderr.writeln(
@@ -210,115 +216,51 @@ Future<void> main() async {
     outputs['bus-factor-score'] = jsonEncode(busFactorScores);
 
     // --- COMPOUND RISKS ANALYSIS ---
+    // All three history scans are scoped to the PR's modified files
+    // (targetFiles), so the run's cost is proportional to the PR, not the
+    // repository. The rules in computeCompoundRisks therefore use absolute
+    // thresholds — repo-relative percentiles are not computable from
+    // PR-scoped data.
     stdout.writeln(
       'Fetching historical churn, code quality, and refactorings for compound risks...',
     );
-    final historicalChurn = await ChurnHeuristic(
-      runner,
-    ).calculateChurnWithAuthors(repositoryPath, since: historySinceIso);
-    final codeQuality = await AdvancedMetricsHeuristic(
-      runner,
-    ).calculateAdvancedMetrics(repositoryPath, since: historySinceIso);
-    final recentRefactorings = await RefactoringDetectionAlgorithm(
-      runner,
-    ).execute(repositoryPath, since: historySinceIso);
+    final historicalChurn = await ChurnHeuristic(runner)
+        .calculateChurnWithAuthors(
+          repositoryPath,
+          since: historySinceIso,
+          targetFiles: modifiedFiles,
+        );
+    final codeQuality = await AdvancedMetricsHeuristic(runner)
+        .calculateAdvancedMetrics(
+          repositoryPath,
+          since: historySinceIso,
+          targetFiles: modifiedFiles,
+        );
+    final recentRefactorings = await RefactoringDetectionAlgorithm(runner)
+        .execute(
+          repositoryPath,
+          since: historySinceIso,
+          targetFiles: modifiedFiles,
+        );
 
     final bugHotspotFiles = bugHotspots.map((m) => m.filePath).toSet();
     final highlyVolatileFileNames = highlyVolatileFiles
         .map((v) => v.filePath)
         .toSet();
 
-    final refactoredFiles = <String>{};
-    for (final ref in recentRefactorings) {
-      for (final renamed in ref.renamedFiles) {
-        refactoredFiles.add(renamed);
-        if (renamed.contains(' -> ')) {
-          final parts = renamed.split(' -> ');
-          if (parts.length == 2) {
-            refactoredFiles.add(parts[1].trim());
-          }
-        }
-      }
-    }
-
-    final fileChurnList = historicalChurn.fileChurn.values.toList()
-      ..sort((a, b) => a.total.compareTo(b.total));
-    final fileComplexityList = codeQuality.fileComplexity.values.toList()
-      ..sort();
-
-    double getChurnPercentile(int total) {
-      if (fileChurnList.isEmpty) return 0.0;
-      final index = fileChurnList.indexWhere((c) => c.total >= total);
-      return index < 0 ? 1.0 : index / fileChurnList.length;
-    }
-
-    double getComplexityPercentile(int complexity) {
-      if (fileComplexityList.isEmpty) return 0.0;
-      final index = fileComplexityList.indexWhere((c) => c >= complexity);
-      return index < 0 ? 1.0 : index / fileComplexityList.length;
-    }
-
-    final tribalKnowledgeFiles = <String>[];
-    final tooManyCooksFiles = <String>[];
-    final defectInjectionFiles = <String>[];
-    final cleanUpExceptionFiles = <String>[];
-    final singleOwnerFiles = <String, List<String>>{};
-
-    for (final file in modifiedFiles) {
-      final fileChurn = historicalChurn.fileChurn[file];
-      final totalCommits = fileChurn?.total ?? 0;
-      final authorsMap = fileChurn?.authors ?? {};
-
-      bool hasSingleOwner = false;
-      bool hasTooManyCooks = false;
-      String? singleOwner;
-
-      if (totalCommits > 0) {
-        int minorContributors = 0;
-        for (final entry in authorsMap.entries) {
-          final percentage = entry.value / totalCommits;
-          if (percentage > 0.5) {
-            hasSingleOwner = true;
-            singleOwner = entry.key;
-          }
-          if (percentage < 0.05) minorContributors++;
-        }
-        if (minorContributors >= 3) hasTooManyCooks = true;
-      }
-
-      final isHotspot = bugHotspotFiles.contains(file);
-      final isVolatile = highlyVolatileFileNames.contains(file);
-      final complexity = codeQuality.fileComplexity[file] ?? 0;
-
-      if (isHotspot && hasSingleOwner) {
-        tribalKnowledgeFiles.add(file);
-        if (singleOwner != null) {
-          singleOwnerFiles.putIfAbsent(singleOwner, () => []).add(file);
-        }
-      }
-
-      if (isHotspot && hasTooManyCooks) {
-        tooManyCooksFiles.add(file);
-      }
-
-      if (isVolatile || (fileChurn != null && fileChurn.total > 10)) {
-        final churnPerc = getChurnPercentile(totalCommits);
-        final compPerc = getComplexityPercentile(complexity);
-        if (churnPerc * compPerc > 0.25) {
-          defectInjectionFiles.add(file);
-        }
-      }
-
-      if (isVolatile || (fileChurn != null && fileChurn.total > 10)) {
-        if (refactoredFiles.contains(file)) {
-          cleanUpExceptionFiles.add(file);
-        }
-      }
-    }
-
-    final departureDefectAuthors = singleOwnerFiles.entries
-        .where((e) => e.value.length >= 2)
-        .toList();
+    final risks = computeCompoundRisks(
+      modifiedFiles: modifiedFiles,
+      bugHotspotFiles: bugHotspotFiles,
+      volatileFiles: highlyVolatileFileNames,
+      historicalChurn: historicalChurn,
+      fileComplexity: codeQuality.fileComplexity,
+      refactoredFiles: extractRefactoredFiles(recentRefactorings),
+    );
+    final tribalKnowledgeFiles = risks.tribalKnowledgeFiles;
+    final tooManyCooksFiles = risks.tooManyCooksFiles;
+    final defectInjectionFiles = risks.defectInjectionFiles;
+    final cleanUpExceptionFiles = risks.cleanUpExceptionFiles;
+    final departureDefectAuthors = risks.departureDefectAuthors;
 
     outputs['tribal-knowledge-count'] = '${tribalKnowledgeFiles.length}';
     outputs['too-many-cooks-count'] = '${tooManyCooksFiles.length}';
@@ -333,12 +275,7 @@ Future<void> main() async {
     // contributor breakdowns) and citations move into collapsed <details>.
     hasWarnings = bugHotspots.isNotEmpty || highlyVolatileFiles.isNotEmpty;
 
-    final hasCompoundRisks =
-        tribalKnowledgeFiles.isNotEmpty ||
-        tooManyCooksFiles.isNotEmpty ||
-        departureDefectAuthors.isNotEmpty ||
-        defectInjectionFiles.isNotEmpty ||
-        cleanUpExceptionFiles.isNotEmpty;
+    final hasCompoundRisks = risks.hasAny;
 
     final fileSummaries = <String, _FileSummary>{};
     _FileSummary summaryFor(String file) =>
@@ -532,7 +469,7 @@ Future<void> main() async {
         '**🔴 Defect-Injection Predictor (Refactoring Targets)**',
       );
       reference.writeln(
-        '- **Condition**: High churn combined with a high complexity outlier on the same file (product > 0.25).',
+        '- **Condition**: A highly volatile or high-churn file (> 10 commits in the window) whose diffs also added a substantial amount of control-flow complexity (≥ 30 branching tokens).',
       );
       reference.writeln(
         '- **Rationale**: Actively-changing complex code is the prime defect-injection risk. These are prime refactoring targets.',

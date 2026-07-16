@@ -1,0 +1,5 @@
+# Local monorepo development: resolve rw_git from the sibling checkout until
+# the version required by pubspec.yaml is published to pub.dev.
+dependency_overrides:
+  rw_git:
+    path: ../rw-git

@@ -12,24 +12,24 @@
 </div>
 
 
-A GitHub Action that analyzes pull requests for historical risk factors. It uses the `rw_git` engine to identify if a PR modifies files that are known bug hotspots or exhibit high code volatility.
+A GitHub Action that analyzes pull requests for historical risk factors. It uses the `rw_git` engine to identify if a PR modifies files that are known bug hotspots, exhibit high code volatility or have a high bus factor.
 
 ## Core Metrics
-- 🪲 **Bug Hotspots Detection (RA-SZZ)**: Evaluates the files modified in the PR against the repository's history to identify files that frequently caused bugs in the past (using the Refactoring-Aware SZZ algorithm).
-- 📈 **Code Volatility Warning**: Identifies highly volatile files modified in the PR (files with high churn across many different authors), which often point to underlying architectural problems.
-- 🚌 **Bus Factor Analysis**: Analyzes the bus factor individually for each file modified in the PR, evaluating knowledge distribution and potential single points of failure based on the full commit history of those specific files.
-- 🔄 **PR Churn Metrics**: Calculates commit and author churn specifically for the pull request's revision range.
+- **Bug Hotspots Detection (RA-SZZ)**: Evaluates the files modified in the PR against the repository's history to identify files that frequently caused bugs in the past (using the Refactoring-Aware SZZ algorithm).
+- **Code Volatility Warning**: Identifies highly volatile files modified in the PR (files with high churn across many different authors), which often point to underlying architectural problems.
+- **Bus Factor Analysis**: Analyzes the bus factor individually for each file modified in the PR, evaluating knowledge distribution and potential single points of failure.
+- **PR Churn Metrics**: Calculates commit and author churn for the pull request's revision range.
 
 ## Compound Risks Analysis
 Synthesizes the raw metrics above to produce highly actionable predictions of software defects and knowledge loss:
-- 👤 **Tribal Knowledge Risk**: Bug hotspots owned by a single author (Bus factor > 50%).
-- 👨‍🍳 **Too Many Cooks Risk**: Bug hotspots with 3 or more minor contributors (< 5% ownership).
-- 🚪 **Departure Defect Risk**: A single author solely owning multiple bug hotspot files.
-- ⚠️ **Defect-Injection Predictor**: Highly volatile, highly complex files requiring immediate refactoring.
-- 🧹 **Clean-up Exception**: High volatility on files safely explained by recent refactorings.
+- **Tribal Knowledge Risk**: Bug hotspots owned by a single author (Bus factor > 50%).
+- **Too Many Cooks Risk**: Bug hotspots with 3 or more minor contributors (< 5% ownership).
+- **Departure Defect Risk**: A single author solely owning multiple bug hotspot files.
+- **Defect-Injection Predictor**: Highly volatile, highly complex files requiring immediate refactoring.
+- **Clean-up Exception**: High volatility on files safely explained by recent refactorings.
 
 ## Evidence & Reporting
-- 📚 **Evidence-Based Reporting**: Automatically includes academic citations (e.g., Bird et al., Nagappan & Ball, Avelino et al.) and rationales explaining *why* a flagged metric matters directly within the PR comment.
+- 📚 **Evidence-Based Reporting**: Automatically includes academic citations and rationales explaining *why* a flagged metric matters directly within the PR comment.
 - 📌 **Sticky PR Comments**: Automatically posts and updates a warning comment on the PR if it flags risky files.
 
 ## Sample Usage

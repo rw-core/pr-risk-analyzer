@@ -14,15 +14,13 @@
 
 A GitHub Action that analyzes pull requests for historical risk factors. It uses the `rw_git` engine to identify if a PR modifies files that are known bug hotspots or exhibit high code volatility.
 
-## Features
-
-### 🚀 Core Metrics
+**🚀 Core Metrics**
 - 🪲 **Bug Hotspots Detection (RA-SZZ)**: Evaluates the files modified in the PR against the repository's history to identify files that frequently caused bugs in the past (using the Refactoring-Aware SZZ algorithm).
 - 📈 **Code Volatility Warning**: Identifies highly volatile files modified in the PR (files with high churn across many different authors), which often point to underlying architectural problems.
 - 🚌 **Bus Factor Analysis**: Analyzes the bus factor individually for each file modified in the PR, evaluating knowledge distribution and potential single points of failure based on the full commit history of those specific files.
 - 🔄 **PR Churn Metrics**: Calculates commit and author churn specifically for the pull request's revision range.
 
-### 🧠 Compound Risks Analysis
+**🧠 Compound Risks Analysis**
 Synthesizes the raw metrics above to produce highly actionable predictions of software defects and knowledge loss:
 - 👤 **Tribal Knowledge Risk**: Bug hotspots owned by a single author (Bus factor > 50%).
 - 👨‍🍳 **Too Many Cooks Risk**: Bug hotspots with 3 or more minor contributors (< 5% ownership).
@@ -30,55 +28,11 @@ Synthesizes the raw metrics above to produce highly actionable predictions of so
 - ⚠️ **Defect-Injection Predictor**: Highly volatile, highly complex files requiring immediate refactoring.
 - 🧹 **Clean-up Exception**: High volatility on files safely explained by recent refactorings.
 
-### 📋 Evidence & Reporting
+**📋 Evidence & Reporting**
 - 📚 **Evidence-Based Reporting**: Automatically includes academic citations (e.g., Bird et al., Nagappan & Ball, Avelino et al.) and rationales explaining *why* a flagged metric matters directly within the PR comment.
 - 📌 **Sticky PR Comments**: Automatically posts and updates a warning comment on the PR if it flags risky files.
 
-## Example PR Comment
-
-When risks are detected, the action posts a detailed sticky comment on the PR:
-
-> ### 🎯 Compound PR Risks
-> Actionable compound findings identified by combining multiple risk vectors:
-> 
-> #### 🔴 Tribal Knowledge Risk
-> **Condition**: A bug hotspot file is owned by a single author (Bus factor > 50%).<br>
-> **Rationale**: Undocumented tribal knowledge in bug-prone code increases the risk of injecting defects if the context is siloed.
-> > **Citation**: Avelino et al. (2016) - Knowledge loss and defect proneness.
-> 
-> - **`lib/core/legacy_payment_gateway.dart`**
-> 
-> #### 🔴 Defect-Injection Predictor (Refactoring Targets)
-> **Condition**: A highly volatile or high-churn file (> 10 commits in the window) whose diffs also added a substantial amount of control-flow complexity (≥ 30 branching tokens).<br>
-> **Rationale**: Actively-changing complex code is the prime defect-injection risk. These are prime refactoring targets.
-> > **Citation**: Nagappan & Ball (2005); Tornhill (2015) - Prioritizing tech debt in the PR.
-> 
-> - **`lib/ui/massive_dashboard_widget.dart`**
-> 
-> ---
-> 
-> ### 📊 PR Risk Analyzer Report
-> 
-> #### ⚠️ Bug Hotspots Detected
-> This PR modifies files with a history of bug fixes. Reviewers should be extra cautious.
-> > **Citation & Explanation**: *Śliwerski, Zimmermann, and Zeller (2005) - SZZ Algorithm.* Files that frequently required fixes in the past are highly likely to contain future bugs.
-> 
-> - **`a1b2c3d`**: Fixed in `e4f5g6h` (File: `lib/core/legacy_payment_gateway.dart`)
-> 
-> #### 🔄 PR Churn Metrics
-> > **Citation & Explanation**: *Nagappan & Ball (2005).* The raw number of commits and authors modifying a file within the PR scope.
-> 
-> **Total PR Commits: 14**
-> - **`lib/core/legacy_payment_gateway.dart`**: 8 changes by 2 authors in this PR.
-> 
-> #### 🚌 PR Files Bus Factor
-> > **Citation & Explanation**: *Avelino et al. (2016).* A measure of knowledge concentration. A low bus factor indicates key developers hold critical, undocumented project knowledge.
-> 
-> - **`lib/core/legacy_payment_gateway.dart`**: Bus Factor **1** (out of 3 developers)
->   - `john.doe`: 45 commits (65.2%)
->   - `jane.smith`: 12 commits (17.4%)
-
-## Usage
+## Sample Usage
 
 Add the following step to your GitHub Actions workflow:
 
@@ -129,3 +83,47 @@ jobs:
 | `departure-defect-count` | Number of authors flagged for departure defect risk. |
 | `defect-injection-count` | Number of files flagged as defect-injection predictors. |
 | `clean-up-exception-count` | Number of highly volatile files safely explained by recent refactorings. |
+
+## Example of how the end-result PR comment looks like
+
+When risks are detected, the action posts a detailed sticky comment on the PR:
+
+> ### 🎯 Compound PR Risks
+> Actionable compound findings identified by combining multiple risk vectors:
+> 
+> #### 🔴 Tribal Knowledge Risk
+> **Condition**: A bug hotspot file is owned by a single author (Bus factor > 50%).<br>
+> **Rationale**: Undocumented tribal knowledge in bug-prone code increases the risk of injecting defects if the context is siloed.
+> > **Citation**: Avelino et al. (2016) - Knowledge loss and defect proneness.
+> 
+> - **`lib/core/legacy_payment_gateway.dart`**
+> 
+> #### 🔴 Defect-Injection Predictor (Refactoring Targets)
+> **Condition**: A highly volatile or high-churn file (> 10 commits in the window) whose diffs also added a substantial amount of control-flow complexity (≥ 30 branching tokens).<br>
+> **Rationale**: Actively-changing complex code is the prime defect-injection risk. These are prime refactoring targets.
+> > **Citation**: Nagappan & Ball (2005); Tornhill (2015) - Prioritizing tech debt in the PR.
+> 
+> - **`lib/ui/massive_dashboard_widget.dart`**
+> 
+> ---
+> 
+> ### 📊 PR Risk Analyzer Report
+> 
+> #### ⚠️ Bug Hotspots Detected
+> This PR modifies files with a history of bug fixes. Reviewers should be extra cautious.
+> > **Citation & Explanation**: *Śliwerski, Zimmermann, and Zeller (2005) - SZZ Algorithm.* Files that frequently required fixes in the past are highly likely to contain future bugs.
+> 
+> - **`a1b2c3d`**: Fixed in `e4f5g6h` (File: `lib/core/legacy_payment_gateway.dart`)
+> 
+> #### 🔄 PR Churn Metrics
+> > **Citation & Explanation**: *Nagappan & Ball (2005).* The raw number of commits and authors modifying a file within the PR scope.
+> 
+> **Total PR Commits: 14**
+> - **`lib/core/legacy_payment_gateway.dart`**: 8 changes by 2 authors in this PR.
+> 
+> #### 🚌 PR Files Bus Factor
+> > **Citation & Explanation**: *Avelino et al. (2016).* A measure of knowledge concentration. A low bus factor indicates key developers hold critical, undocumented project knowledge.
+> 
+> - **`lib/core/legacy_payment_gateway.dart`**: Bus Factor **1** (out of 3 developers)
+>   - `john.doe`: 45 commits (65.2%)
+>   - `jane.smith`: 12 commits (17.4%)

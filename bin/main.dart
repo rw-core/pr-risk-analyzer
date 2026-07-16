@@ -615,8 +615,7 @@ Future<void> main() async {
   final reportSb = StringBuffer();
   reportSb.writeln('## PR Risk Analyzer Report');
   reportSb.writeln(
-    '**History window scanned**: `$historyRangeLabel` '
-    '(2 years of history preceding base commit `${prBaseSha.substring(0, 7)}`)',
+    '**History window scanned**: `$historyRangeLabel` ',
   );
   reportSb.writeln('');
   if (failure != null) {

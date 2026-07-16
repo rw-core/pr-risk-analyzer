@@ -23,6 +23,10 @@ inputs:
     description: When true, exit non-zero if the PR touches any bug hotspots or volatile files.
     required: false
     default: 'false'
+  history-days:
+    description: Number of days back to scan for history from the base commit.
+    required: false
+    default: '730'
 
 outputs:
   bug-hotspots-count:
@@ -64,6 +68,7 @@ runs:
         INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
         INPUT_VOLATILITY_THRESHOLD: ${{ inputs.volatility-threshold }}
         INPUT_FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
+        INPUT_HISTORY_DAYS: ${{ inputs.history-days }}
 
     - name: Set up Dart (fallback)
       if: steps.gate.outputs.mode == 'fallback'
@@ -78,3 +83,4 @@ runs:
         INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
         INPUT_VOLATILITY_THRESHOLD: ${{ inputs.volatility-threshold }}
         INPUT_FAIL_ON_WARNING: ${{ inputs.fail-on-warning }}
+        INPUT_HISTORY_DAYS: ${{ inputs.history-days }}

@@ -20,9 +20,11 @@ Future<void> main() async {
   final workingDirectory = env['INPUT_WORKING_DIRECTORY'] ?? '.';
   final volatilityThresholdStr = env['INPUT_VOLATILITY_THRESHOLD'] ?? '20.0';
   final failOnWarningStr = env['INPUT_FAIL_ON_WARNING'] ?? 'false';
+  final historyDaysStr = env['INPUT_HISTORY_DAYS'] ?? '730';
 
   final volatilityThreshold = double.tryParse(volatilityThresholdStr) ?? 20.0;
   final failOnWarning = failOnWarningStr.toLowerCase() == 'true';
+  final historyDays = int.tryParse(historyDaysStr) ?? 730;
 
   final eventPath = env['GITHUB_EVENT_PATH'];
   final shas = GitHub.readPrShas(eventPath);
@@ -64,14 +66,7 @@ Future<void> main() async {
   final baseDate = GitDateTime.parse(
     (baseDateRes.stdout?.toString() ?? '').trim(),
   ).utc;
-  final historySince = DateTime.utc(
-    baseDate.year - 2,
-    baseDate.month,
-    baseDate.day,
-    baseDate.hour,
-    baseDate.minute,
-    baseDate.second,
-  );
+  final historySince = baseDate.subtract(Duration(days: historyDays));
   final historySinceIso = historySince.toIso8601String();
   final historyRangeLabel =
       '${historySince.toIso8601String().split('T').first} - '

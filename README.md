@@ -1,13 +1,16 @@
 <div align="center">
-  <img src="assets/logo.png" alt="PR Risk Analyzer Logo" width="150" />
+  <img src="assets/logo.png" alt="PR Risk Analyzer Logo" width="128" />
+
   <h1>PR Risk Analyzer</h1>
 
   <p>
-    <a href="https://github.com/rw-core/pr-risk-analyzer/actions"><img src="https://img.shields.io/github/actions/workflow/status/rw-core/pr-risk-analyzer/test.yml?branch=main&style=flat-square" alt="Build Status"></a>
-    <a href="https://github.com/rw-core/pr-risk-analyzer/releases"><img src="https://img.shields.io/github/v/release/rw-core/pr-risk-analyzer?style=flat-square" alt="Release"></a>
+    <a href="https://github.com/rw-core/pr-risk-analyzer/actions"><img src="https://img.shields.io/github/actions/workflow/status/rw-core/pr-risk-analyzer/test.yml?branch=main&style=flat-square" alt="CI"></a>
+    <a href="https://github.com/rw-core/pr-risk-analyzer/releases"><img src="https://img.shields.io/github/v/release/rw-core/pr-risk-analyzer?style=flat-square" alt="Latest release"></a>
+    <a href="https://github.com/marketplace/actions/pr-risk-analyzer"><img src="https://img.shields.io/badge/marketplace-pr--risk--analyzer-blue?logo=github&style=flat-square" alt="GitHub Marketplace"></a>
     <a href="https://github.com/rw-core/pr-risk-analyzer/blob/main/LICENSE"><img src="https://img.shields.io/github/license/rw-core/pr-risk-analyzer?style=flat-square" alt="License"></a>
   </p>
 </div>
+
 
 A GitHub Action that analyzes pull requests for historical risk factors. It uses the `rw_git` engine to identify if a PR modifies files that are known bug hotspots or exhibit high code volatility.
 
@@ -97,9 +100,12 @@ jobs:
       - name: Run PR Risk Analyzer
         uses: rw-core/pr-risk-analyzer@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          volatility-threshold: '20.0'
-          fail-on-warning: 'false'
+          # Optional configurable parameters
+          # github-token: ${{ github.token }}
+          # working-directory: '.'
+          # volatility-threshold: '20.0'
+          # fail-on-warning: 'false'
+          # history-days: '730'
 ```
 
 ## Inputs
